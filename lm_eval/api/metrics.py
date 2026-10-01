@@ -538,10 +538,16 @@ def _bootstrap_internal_no_mp(
 
     print(f"bootstrapping for stddev: {f.__name__}")
 
-    # A single loop replaces the multiprocessing pool.
-    for i in tqdm(range(iters // chunk_size)):
+    # A single loop replaces the multiprocessing pool. Keep the final
+    # partial chunk so the requested number of bootstrap replicates is exact.
+    full_chunks, remainder = divmod(iters, chunk_size)
+    chunk_sizes = [chunk_size] * full_chunks
+    if remainder:
+        chunk_sizes.append(remainder)
+
+    for i, n in enumerate(tqdm(chunk_sizes)):
         rnd = random.Random(i)
-        for _ in range(chunk_size):
+        for _ in range(n):
             res.append(f(rnd.choices(xs, k=len(xs))))
 
     return res
@@ -567,19 +573,29 @@ def bootstrap_stderr(
         # Thankfully, shouldn't matter because our samples are pretty big usually anyways
         res = []
         chunk_size = min(1000, iters)
+        full_chunks, remainder = divmod(iters, chunk_size)
         from tqdm import tqdm
 
         print("bootstrapping for stddev:", f.__name__)
         with mp.Pool(mp.cpu_count()) as pool:
-            for bootstrap in tqdm(
-                pool.imap(
-                    _bootstrap_internal(f, chunk_size),
-                    [(i, xs) for i in range(iters // chunk_size)],
-                ),
-                total=iters // chunk_size,
+            progress = tqdm(total=full_chunks + int(bool(remainder)))
+            for bootstrap in pool.imap(
+                _bootstrap_internal(f, chunk_size),
+                [(i, xs) for i in range(full_chunks)],
             ):
                 # sample w replacement
                 res.extend(bootstrap)
+                progress.update(1)
+
+            if remainder:
+                res.extend(
+                    pool.apply(
+                        _bootstrap_internal(f, remainder),
+                        ((full_chunks, xs),),
+                    )
+                )
+                progress.update(1)
+            progress.close()
     else:
         res = _bootstrap_internal_no_mp(f, xs, iters)
 
