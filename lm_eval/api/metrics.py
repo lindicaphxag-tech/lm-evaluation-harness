@@ -539,9 +539,15 @@ def _bootstrap_internal_no_mp(
     print(f"bootstrapping for stddev: {f.__name__}")
 
     # A single loop replaces the multiprocessing pool.
-    for i in tqdm(range(iters // chunk_size)):
+    full_chunks, remainder = divmod(iters, chunk_size)
+    for i in tqdm(range(full_chunks)):
         rnd = random.Random(i)
         for _ in range(chunk_size):
+            res.append(f(rnd.choices(xs, k=len(xs))))
+
+    if remainder:
+        rnd = random.Random(full_chunks)
+        for _ in range(remainder):
             res.append(f(rnd.choices(xs, k=len(xs))))
 
     return res
@@ -570,16 +576,20 @@ def bootstrap_stderr(
         from tqdm import tqdm
 
         print("bootstrapping for stddev:", f.__name__)
+        full_chunks, remainder = divmod(iters, chunk_size)
         with mp.Pool(mp.cpu_count()) as pool:
             for bootstrap in tqdm(
                 pool.imap(
                     _bootstrap_internal(f, chunk_size),
-                    [(i, xs) for i in range(iters // chunk_size)],
+                    [(i, xs) for i in range(full_chunks)],
                 ),
-                total=iters // chunk_size,
+                total=full_chunks,
             ):
                 # sample w replacement
                 res.extend(bootstrap)
+
+            if remainder:
+                res.extend(_bootstrap_internal(f, remainder)((full_chunks, xs)))
     else:
         res = _bootstrap_internal_no_mp(f, xs, iters)
 
