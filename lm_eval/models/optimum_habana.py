@@ -128,11 +128,12 @@ class HabanaLM(HFLM):
         """
         Override to change only max_length property
         """
-        loglikelyhood_max_length = self.max_length
+        loglikelihood_max_length = self.max_length
         self.max_length = super().max_length
-        res = super().generate_until(requests, disable_tqdm)
-        self.max_length = loglikelyhood_max_length
-        return res
+        try:
+            return super().generate_until(requests, disable_tqdm)
+        finally:
+            self.max_length = loglikelihood_max_length
 
     def _model_generate(
         self,
