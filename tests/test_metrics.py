@@ -1,6 +1,6 @@
 import unittest.mock as mock
 
-from lm_eval.api.metrics import _bootstrap_internal_no_mp, mean
+from lm_eval.api.metrics import _bootstrap_chunk_sizes, _bootstrap_internal_no_mp, mean
 from lm_eval.api.task import ConfigurableTask
 from lm_eval.config.task import TaskConfig
 
@@ -159,9 +159,7 @@ def test_bootstrap_internal_no_mp():
     data = [1, 2, 3, 4, 5]
 
     # Mock tqdm to avoid progress bar output during testing
-    with mock.patch("tqdm.tqdm") as mock_tqdm:
-        mock_tqdm.return_value = range(1)  # Single chunk
-
+    with mock.patch("tqdm.tqdm", side_effect=lambda iterable, **_: iterable):
         # Mock print to avoid output during testing
         with mock.patch("builtins.print"):
             result = _bootstrap_internal_no_mp(mean, data, 100)
@@ -177,6 +175,12 @@ def test_bootstrap_internal_no_mp():
     original_mean = mean(data)
     assert abs(bootstrap_mean - original_mean) < 0.5  # Should be reasonably close
 
+
+
+def test_bootstrap_chunk_sizes_preserves_remainder():
+    assert _bootstrap_chunk_sizes(500) == [500]
+    assert _bootstrap_chunk_sizes(1500) == [1000, 500]
+    assert _bootstrap_chunk_sizes(2500) == [1000, 1000, 500]
 
 
 def test_bootstrap_internal_no_mp_runs_remainder():
