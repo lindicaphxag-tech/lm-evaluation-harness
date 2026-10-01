@@ -525,6 +525,16 @@ class _bootstrap_internal:
         return res
 
 
+def _bootstrap_chunk_sizes(iters: int) -> list[int]:
+    """Split bootstrap work into chunks of at most 1000 without dropping a remainder."""
+    chunk_size = min(1000, iters)
+    full_chunks, remainder = divmod(iters, chunk_size)
+    chunks = [chunk_size] * full_chunks
+    if remainder:
+        chunks.append(remainder)
+    return chunks
+
+
 def _bootstrap_internal_no_mp(
     f: Callable[[Sequence[T]], float], xs: Sequence[T], iters: int
 ) -> list[float]:
@@ -540,10 +550,7 @@ def _bootstrap_internal_no_mp(
 
     # A single loop replaces the multiprocessing pool. Keep the final
     # partial chunk so the requested number of bootstrap replicates is exact.
-    full_chunks, remainder = divmod(iters, chunk_size)
-    chunk_sizes = [chunk_size] * full_chunks
-    if remainder:
-        chunk_sizes.append(remainder)
+    chunk_sizes = _bootstrap_chunk_sizes(iters)
 
     for i, n in enumerate(tqdm(chunk_sizes)):
         rnd = random.Random(i)
@@ -573,12 +580,14 @@ def bootstrap_stderr(
         # Thankfully, shouldn't matter because our samples are pretty big usually anyways
         res = []
         chunk_size = min(1000, iters)
-        full_chunks, remainder = divmod(iters, chunk_size)
+        chunk_sizes = _bootstrap_chunk_sizes(iters)
+        full_chunks = len(chunk_sizes) - int(chunk_sizes[-1] != chunk_size)
+        remainder = chunk_sizes[-1] if chunk_sizes[-1] != chunk_size else 0
         from tqdm import tqdm
 
         print("bootstrapping for stddev:", f.__name__)
         with mp.Pool(mp.cpu_count()) as pool:
-            progress = tqdm(total=full_chunks + int(bool(remainder)))
+            progress = tqdm(total=len(chunk_sizes))
             for bootstrap in pool.imap(
                 _bootstrap_internal(f, chunk_size),
                 [(i, xs) for i in range(full_chunks)],
