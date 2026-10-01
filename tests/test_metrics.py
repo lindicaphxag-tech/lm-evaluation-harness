@@ -178,6 +178,26 @@ def test_bootstrap_internal_no_mp():
     assert abs(bootstrap_mean - original_mean) < 0.5  # Should be reasonably close
 
 
+
+def test_bootstrap_internal_no_mp_runs_remainder():
+    """Non-multiple iteration counts must not drop the final partial chunk."""
+
+    data = [0, 1, 1, 0]
+    calls = 0
+
+    def statistic(xs):
+        nonlocal calls
+        calls += 1
+        return mean(xs)
+
+    with mock.patch("tqdm.tqdm", side_effect=lambda iterable, **_: iterable):
+        with mock.patch("builtins.print"):
+            result = _bootstrap_internal_no_mp(statistic, data, 1500)
+
+    assert calls == 1500
+    assert len(result) == 1500
+
+
 def test_dict_metric_uses_custom_aggregation():
     """Regression test for #3314: dict-valued metrics must use the custom
     aggregation function, not silently fall back to mean()."""
