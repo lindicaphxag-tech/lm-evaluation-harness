@@ -507,20 +507,19 @@ def _sacreformat(refs, preds):
 
 class _bootstrap_internal:
     """
-    Pool worker: `(i, xs)` → `n` bootstrap replicates
-    of `f(xs)`using a RNG seeded with `i`.
+    Pool worker: `(i, xs, n)` → `n` bootstrap replicates
+    of `f(xs)` using a RNG seeded with `i`.
     """
 
-    def __init__(self, f: Callable[[Sequence[T]], float], n: int) -> None:
+    def __init__(self, f: Callable[[Sequence[T]], float]) -> None:
         self.f = f
-        self.n = n
 
-    def __call__(self, v: tuple[int, Sequence[T]]) -> list[float]:
-        i, xs = v
+    def __call__(self, v: tuple[int, Sequence[T], int]) -> list[float]:
+        i, xs, n = v
         rnd = random.Random()
         rnd.seed(i)
         res = []
-        for _ in range(self.n):
+        for _ in range(n):
             res.append(self.f(rnd.choices(xs, k=len(xs))))
         return res
 
@@ -539,9 +538,14 @@ def _bootstrap_internal_no_mp(
     print(f"bootstrapping for stddev: {f.__name__}")
 
     # A single loop replaces the multiprocessing pool.
-    for i in tqdm(range(iters // chunk_size)):
+    full_chunks, remainder = divmod(iters, chunk_size)
+    chunk_sizes = [chunk_size] * full_chunks
+    if remainder:
+        chunk_sizes.append(remainder)
+
+    for i, n in tqdm(enumerate(chunk_sizes), total=len(chunk_sizes)):
         rnd = random.Random(i)
-        for _ in range(chunk_size):
+        for _ in range(n):
             res.append(f(rnd.choices(xs, k=len(xs))))
 
     return res
@@ -552,7 +556,7 @@ def bootstrap_stderr(
 ) -> float:
     """
     Bootstrap estimate of the standard error of statistic `f(xs)`
-    using up to `iters` resamples, chunked (≤ 1000 draws)
+    using `iters` resamples, chunked (≤ 1000 draws)
 
     Executes in parallel unless the env-var `DISABLE_MULTIPROC` is set;
     """
@@ -570,13 +574,18 @@ def bootstrap_stderr(
         from tqdm import tqdm
 
         print("bootstrapping for stddev:", f.__name__)
+        full_chunks, remainder = divmod(iters, chunk_size)
+        chunk_sizes = [chunk_size] * full_chunks
+        if remainder:
+            chunk_sizes.append(remainder)
+
         with mp.Pool(mp.cpu_count()) as pool:
             for bootstrap in tqdm(
                 pool.imap(
-                    _bootstrap_internal(f, chunk_size),
-                    [(i, xs) for i in range(iters // chunk_size)],
+                    _bootstrap_internal(f),
+                    [(i, xs, n) for i, n in enumerate(chunk_sizes)],
                 ),
-                total=iters // chunk_size,
+                total=len(chunk_sizes),
             ):
                 # sample w replacement
                 res.extend(bootstrap)

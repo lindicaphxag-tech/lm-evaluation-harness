@@ -12,3 +12,17 @@ def test_bootstrapping():
     bootstrapped = metrics.bootstrap_stderr(metrics.mean, arr, iters=100000)
 
     assert bootstrapped == pytest.approx(expected, abs=1e-4)
+
+
+def test_bootstrap_stderr_runs_requested_iterations(monkeypatch):
+    monkeypatch.setenv("DISABLE_MULTIPROC", "1")
+    calls = 0
+
+    def statistic(xs):
+        nonlocal calls
+        calls += 1
+        return sum(xs) / len(xs)
+
+    metrics.bootstrap_stderr(statistic, [0, 1, 1, 0], iters=1500)
+
+    assert calls == 1500
