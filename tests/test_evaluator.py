@@ -83,6 +83,15 @@ def test_evaluator(
     )
 
 
+def test_doc_iterator_rejects_negative_sample_ids():
+    task_manager = tasks.TaskManager(include_path="tests/test_configs")
+    task_dict = task_manager.load(["simple_task"])
+    task = task_dict["tasks"]["simple_task"]
+
+    with pytest.raises(AssertionError, match=r"interval \[0,k-1\]"):
+        list(task.doc_iterator(rank=0, world_size=1, samples=[-1]))
+
+
 @pytest.mark.parametrize(
     "task_name,limit,model,model_args",
     [
