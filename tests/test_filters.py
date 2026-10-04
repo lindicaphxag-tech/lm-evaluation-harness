@@ -40,6 +40,31 @@ def test_format_span_normalizes_label_only():
     ]
 
 
+def test_multi_choice_regex_choice_text_does_not_match_inside_ascii_word():
+    filt = MultiChoiceRegexFilter(regex_pattern=r"()()")
+    docs = [{"choices": ["cat", "dog"]}]
+
+    assert filt.apply([["The explanation is about education."]], docs) == [
+        ["[invalid]"]
+    ]
+    assert filt.apply([["The answer is cat."]], docs) == [["(A)"]]
+
+
+def test_multi_choice_regex_ascii_choice_does_not_match_longer_token():
+    filt = MultiChoiceRegexFilter(regex_pattern=r"()()")
+    docs = [{"choices": ["C++", "Rust"]}]
+
+    assert filt.apply([["Use C++17 for this example."]], docs) == [["[invalid]"]]
+    assert filt.apply([["The answer is C++."]], docs) == [["(A)"]]
+
+
+def test_multi_choice_regex_non_ascii_choice_keeps_unspaced_matching():
+    filt = MultiChoiceRegexFilter(regex_pattern=r"()()")
+    docs = [{"choices": ["北京", "上海"]}]
+
+    assert filt.apply([["答案是北京。"]], docs) == [["(A)"]]
+
+
 def test_multi_choice_regex_prefix_choice_does_not_shadow_longer_choice():
     # When one choice's text is a prefix of another, naming the longer choice in the
     # response must map to the longer choice's letter. Regression: the fallback regex
