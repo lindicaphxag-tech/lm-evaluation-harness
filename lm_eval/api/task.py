@@ -583,7 +583,7 @@ class Task(abc.ABC):
     ) -> Iterator[tuple[int, Any]]:
         if samples:
             n = len(self.eval_docs)
-            assert all(e < n for e in samples), (
+            assert all(0 <= e < n for e in samples), (
                 f"Elements of --samples should be in the interval [0,k-1] where k is the number of total examples. In this case, k={n}."
             )
             eval_logger.info(
