@@ -209,7 +209,15 @@ class MultiChoiceRegexFilter(RegexFilter):
             choices = doc["choices"]
             for c in choices:
                 m = filter_ignores(c.strip())
-                fallback_regexes.append(f"{re.escape(m)}")
+                escaped_choice = re.escape(m)
+                # For ASCII answer text, require that a match is not embedded in
+                # a larger word/token. This prevents e.g. choice "cat" from
+                # matching the "cat" inside "education". Keep non-ASCII choices
+                # unchanged because many languages do not use whitespace word
+                # boundaries.
+                if m.isascii() and any(ch.isalnum() for ch in m):
+                    escaped_choice = rf"(?<!\w){escaped_choice}(?!\w)"
+                fallback_regexes.append(escaped_choice)
                 choice_to_alpha[m] = f"({next_alpha})"
 
                 without_paren_fallback_regexes.append(next_alpha)
