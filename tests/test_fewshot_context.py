@@ -707,6 +707,94 @@ class TestFewshotContext:
             n=1, eval_doc=None
         )
 
+    def test_sampler_excludes_eval_doc_when_fallback_resolves_to_test(
+        self, mock_configurable_task
+    ):
+        """Fallback-to-test must exclude the evaluated document itself."""
+        mock_configurable_task.config.training_split = None
+        mock_configurable_task.config.validation_split = None
+        mock_configurable_task.config.test_split = "test"
+        mock_configurable_task.config.fewshot_split = None
+        mock_configurable_task.fewshot_cfg.split = None
+        mock_configurable_task.fewshot_cfg.samples = None
+        mock_configurable_task.doc_to_text = Mock(return_value="Q")
+        mock_configurable_task.doc_to_target = Mock(return_value="A")
+
+        eval_doc = {"id": 123}
+        ConfigurableTask.fewshot_context(
+            mock_configurable_task, doc=eval_doc, num_fewshot=1
+        )
+
+        mock_configurable_task.sampler.sample.assert_called_once_with(
+            n=1, eval_doc=eval_doc
+        )
+
+    def test_sampler_excludes_eval_doc_when_fallback_resolves_to_validation(
+        self, mock_configurable_task
+    ):
+        """Validation-only tasks must also exclude self-demonstrations."""
+        mock_configurable_task.config.training_split = None
+        mock_configurable_task.config.validation_split = "validation"
+        mock_configurable_task.config.test_split = None
+        mock_configurable_task.config.fewshot_split = None
+        mock_configurable_task.fewshot_cfg.split = None
+        mock_configurable_task.fewshot_cfg.samples = None
+        mock_configurable_task.doc_to_text = Mock(return_value="Q")
+        mock_configurable_task.doc_to_target = Mock(return_value="A")
+
+        eval_doc = {"id": 123}
+        ConfigurableTask.fewshot_context(
+            mock_configurable_task, doc=eval_doc, num_fewshot=1
+        )
+
+        mock_configurable_task.sampler.sample.assert_called_once_with(
+            n=1, eval_doc=eval_doc
+        )
+
+    def test_sampler_no_exclusion_when_fallback_resolves_to_training(
+        self, mock_configurable_task
+    ):
+        """A genuine training fallback remains independent of the eval split."""
+        mock_configurable_task.config.training_split = "train"
+        mock_configurable_task.config.validation_split = None
+        mock_configurable_task.config.test_split = "test"
+        mock_configurable_task.config.fewshot_split = None
+        mock_configurable_task.fewshot_cfg.split = None
+        mock_configurable_task.fewshot_cfg.samples = None
+        mock_configurable_task.doc_to_text = Mock(return_value="Q")
+        mock_configurable_task.doc_to_target = Mock(return_value="A")
+
+        eval_doc = {"id": 123}
+        ConfigurableTask.fewshot_context(
+            mock_configurable_task, doc=eval_doc, num_fewshot=1
+        )
+
+        mock_configurable_task.sampler.sample.assert_called_once_with(
+            n=1, eval_doc=None
+        )
+
+    def test_sampler_no_exclusion_for_explicit_fewshot_samples(
+        self, mock_configurable_task
+    ):
+        """Explicit few-shot samples are not treated as dataset fallback rows."""
+        mock_configurable_task.config.training_split = None
+        mock_configurable_task.config.validation_split = None
+        mock_configurable_task.config.test_split = "test"
+        mock_configurable_task.config.fewshot_split = None
+        mock_configurable_task.fewshot_cfg.split = None
+        mock_configurable_task.fewshot_cfg.samples = [{"id": "shot"}]
+        mock_configurable_task.doc_to_text = Mock(return_value="Q")
+        mock_configurable_task.doc_to_target = Mock(return_value="A")
+
+        eval_doc = {"id": 123}
+        ConfigurableTask.fewshot_context(
+            mock_configurable_task, doc=eval_doc, num_fewshot=1
+        )
+
+        mock_configurable_task.sampler.sample.assert_called_once_with(
+            n=1, eval_doc=None
+        )
+
     def test_chat_template_multiturn(self, mock_configurable_task):
         """Chat template with fewshot_as_multiturn=True keeps messages separate."""
         fs_doc = {"q": "Q1", "a": "A1"}

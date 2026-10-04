@@ -979,11 +979,37 @@ class ConfigurableTask(Task):
             messages.append(Message("system", system_prompt))
 
         if num_fewshot > 0:
+            # Resolve where the few-shot pool actually comes from, not only the
+            # configured fewshot_split. When the fallback pool is the same split
+            # being evaluated, the sampler must exclude the current document to
+            # avoid leaking its gold answer into its own prompt.
+            fewshot_source_split = self.fewshot_cfg.split
+            uses_explicit_samples = (
+                self.config.fewshot_config is not None
+                and self.fewshot_cfg.samples is not None
+            )
+            if fewshot_source_split is None and not uses_explicit_samples:
+                if self.config.training_split is not None:
+                    fewshot_source_split = self.config.training_split
+                elif self.config.validation_split is not None:
+                    fewshot_source_split = self.config.validation_split
+                else:
+                    fewshot_source_split = self.config.test_split
+
+            eval_split = (
+                self.config.test_split
+                if self.config.test_split is not None
+                else self.config.validation_split
+            )
+            eval_doc = (
+                doc
+                if fewshot_source_split is not None
+                and fewshot_source_split == eval_split
+                else None
+            )
             for fs_doc in self.sampler.sample(
                 n=num_fewshot,
-                eval_doc=doc
-                if self.fewshot_cfg.split == self.config.test_split
-                else None,
+                eval_doc=eval_doc,
             ):
                 q, c, a = (
                     self.doc_to_text(fs_doc, self.fewshot_cfg.doc_to_text),
