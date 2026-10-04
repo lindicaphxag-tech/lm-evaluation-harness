@@ -20,6 +20,9 @@ import string
 import unicodedata
 
 import langdetect
+
+# IFEval scores must be reproducible for identical model responses.
+langdetect.DetectorFactory.seed = 0
 import spacy
 from absl import logging
 

@@ -24,6 +24,9 @@ from typing import Dict, Optional, Sequence, Union
 
 import langdetect
 
+# IFEval scores must be reproducible for identical model responses.
+langdetect.DetectorFactory.seed = 0
+
 from lm_eval.tasks.ifeval import instructions_util
 
 

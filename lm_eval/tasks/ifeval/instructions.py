@@ -35,6 +35,9 @@ from collections.abc import Sequence
 
 import langdetect
 
+# IFEval scores must be reproducible for identical model responses.
+langdetect.DetectorFactory.seed = 0
+
 from lm_eval.tasks.ifeval import instructions_util
 
 
