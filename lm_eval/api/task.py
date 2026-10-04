@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import ast
+import json
 import logging
 import random
 import re
@@ -59,6 +60,53 @@ eval_logger = logging.getLogger(__name__)
 
 
 TaskConfig = TaskConfig
+
+
+def _canonicalize_request_cache_config(value, *, config: TaskConfig):
+    """Convert task config values into a deterministic JSON-compatible form."""
+    if callable(value):
+        return config.serialize_function(value)
+    if isinstance(value, Mapping):
+        return {
+            str(key): _canonicalize_request_cache_config(child, config=config)
+            for key, child in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [
+            _canonicalize_request_cache_config(child, config=config)
+            for child in value
+        ]
+    if isinstance(value, set):
+        normalized = [
+            _canonicalize_request_cache_config(child, config=config)
+            for child in value
+        ]
+        return sorted(
+            normalized,
+            key=lambda child: json.dumps(
+                child,
+                sort_keys=True,
+                default=utils.handle_non_serializable,
+                ensure_ascii=False,
+            ),
+        )
+    return value
+
+
+def _request_cache_config_hash(config: TaskConfig) -> str:
+    """Hash the effective task config used to construct model requests."""
+    canonical = _canonicalize_request_cache_config(
+        config.to_dict(keep_callable=True),
+        config=config,
+    )
+    serialized = json.dumps(
+        canonical,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=utils.handle_non_serializable,
+        ensure_ascii=False,
+    )
+    return utils.hash_string(serialized)
 
 
 class Task(abc.ABC):
@@ -285,7 +333,11 @@ class Task(abc.ABC):
         # used with caching
         og_limit = limit
 
-        cache_key = f"requests-{self._config.task}-{self.config.num_fewshot}shot-rank{rank}-world_size{world_size}"
+        config_hash = _request_cache_config_hash(self.config)
+        cache_key = (
+            f"requests-{self._config.task}-{self.config.num_fewshot}shot-"
+            f"rank{rank}-world_size{world_size}-task_config_hash{config_hash}"
+        )
         cache_key += "-chat_template" if apply_chat_template else ""
         cache_key += "-fewshot_as_multiturn" if fewshot_as_multiturn else ""
         cache_key += (
